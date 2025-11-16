@@ -1,0 +1,50 @@
+name: Deploy to Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
+    - name: Set environment based on branch
+      id: vars
+      run: |
+        if [ "${GITHUB_REF##*/}" = "main" ]; then
+          echo "ENVIRONMENT=myapp-prod" >> $GITHUB_ENV
+          echo "LABEL=production" >> $GITHUB_ENV
+        else
+          echo "ENVIRONMENT=myapp-staging" >> $GITHUB_ENV
+          echo "LABEL=staging" >> $GITHUB_ENV
+        fi
+
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.2
+
+    - name: Install dependencies
+      run: |
+        bundle install --without development test
+        RAILS_ENV=${LABEL} rails assets:precompile
+
+    - name: Create deploy zip
+      run: zip -r deploy.zip .
+
+    - name: Deploy to EB
+      uses: einaregilsson/beanstalk-deploy@v22
+      with:
+        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        application_name: myapp
+        environment_name: ${{ env.ENVIRONMENT }}
+        version_label: ${{ github.run_id }}-${{ env.LABEL }}
+        region: us-east-1
+        file: deploy.zip
