@@ -48,4 +48,4 @@ jobs:
         environment_name: ${{ env.ENVIRONMENT }}
         version_label: ${{ github.run_id }}-${{ env.LABEL }}
         region: us-east-1
-        file: deploy.zip
+        deployment_package: deploy.zip
