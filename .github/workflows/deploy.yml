@@ -32,7 +32,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        bundle install --without development test
+        bundle install
         RAILS_ENV=${LABEL} rails assets:precompile
 
     - name: Create deploy zip
