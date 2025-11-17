@@ -21,4 +21,4 @@ test:
 production:
   primary: &primary_production
     <<: *default
-    database: try-deploy-to-aws-production-prod
+    database: db-test-prod

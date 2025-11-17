@@ -1,51 +1,66 @@
-name: Deploy to Elastic Beanstalk
+name: Deploy to EC2
 
 on:
   push:
     branches:
       - main
-      - staging
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout source
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set environment based on branch
-      id: vars
-      run: |
-        if [ "${GITHUB_REF##*/}" = "main" ]; then
-          echo "ENVIRONMENT=myapp-prod" >> $GITHUB_ENV
-          echo "LABEL=production" >> $GITHUB_ENV
-        else
-          echo "ENVIRONMENT=myapp-staging" >> $GITHUB_ENV
-          echo "LABEL=staging" >> $GITHUB_ENV
-        fi
-
-    - name: Setup Ruby
+    - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: 3.2
+        bundler-cache: true
 
     - name: Install dependencies
       run: |
-        export SECRET_KEY_BASE=${{ secrets.SECRET_KEY_BASE }}
         bundle install
-        RAILS_ENV=${LABEL} rails assets:precompile
+        RAILS_ENV=production bundle exec rails assets:precompile
 
-    - name: Create deploy zip
-      run: zip -r deploy.zip .
+    - name: Create deploy archive
+      run: zip -r deploy.zip . -x "*.git*"
 
-    - name: Deploy to EB
-      uses: einaregilsson/beanstalk-deploy@v22
+    - name: Upload files to EC2
+      uses: appleboy/scp-action@v0.1.7
       with:
-        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        application_name: try-deploy-to-aws-prod
-        environment_name: Try-deploy-to-aws-prod-env
-        version_label: ${{ github.run_id }}-production
-        region: us-east-1
-        deployment_package: deploy.zip
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "deploy.zip"
+        target: "/home/${{ secrets.EC2_USER }}/deploy.zip"
+
+    - name: Run deploy commands on EC2
+      uses: appleboy/ssh-action@v1.1.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/${{ secrets.EC2_USER }}
+          rm -rf production_tmp
+          unzip deploy.zip -d production_tmp
+
+          # Бекап старої версії
+          rm -rf production_old
+          mv production production_old || true
+
+          # Нова версія
+          mv production_tmp production
+
+          cd production
+
+          # Інстал залежностей
+          bundle install --without development test
+
+          # Міграції
+          RAILS_ENV=production bundle exec rails db:migrate
+
+          # Рестарт сервісу
+          sudo systemctl restart production
