@@ -37,7 +37,7 @@ jobs:
         target: "/home/${{ secrets.EC2_USER }}/deploy.zip"
 
     - name: Run deploy commands on EC2
-      uses: appleboy/ssh-action@v1.1.0
+      uses: appleboy/ssh-action@v1.2.3
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
